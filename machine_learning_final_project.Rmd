@@ -1,0 +1,89 @@
+---
+title: "Machine Learning - Final Project"
+author: "Kevin Bailey"
+date: "January 28, 2016"
+output: html_document
+---
+
+# Introduction
+The purpose of this assignment is to create a prediction model for identifying 5 different classes exercise quality for Dumbbell Biceps Curl in five different fashions: 
+exactly according to the specification (Class A), 
+throwing the elbows to the front (Class B), 
+lifting the dumbbell only halfway (Class C), 
+lowering the dumbbell only halfway (Class D) 
+and throwing the hips to the front (Class E)
+
+The final evaluation will be to correctly identify the exercise class by a single measurement so this will not require using time series measurements as was done in the study that produced the datasets.
+
+The training data was downloaded from:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+The Quiz validation was downloaded from:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+# Methodology
+
+I used the caret package for R and partition the training set in to a training and test set.
+
+```{r}
+set.seed(1234)
+library(caret); 
+model_building_data <- read.csv('data/pml-training.csv')
+quiz_data <- read.csv('data/pml-testing.csv') 
+
+
+#partition training data to training and testing
+inTrain <- createDataPartition(y=model_building_data$classe, p=0.75, list=FALSE)
+
+training_data <- model_building_data[inTrain,]
+testing_data <- model_building_data[-inTrain,]
+
+```
+
+The training data has 160 columns of information many of which aren't needed for the model.  
+
+Columns 1-7 contain information about the user, and time series information which we've decided aren't relevant to the prediction task so we remove them first.  Followed by any remaining columns that have a near zero variance.  These changes are applied to both my training and testing datasets
+```{r}
+# throw out name and belt trace information
+training_data <- training_data[,-c(1:7)]
+testing_data <- testing_data[,-c(1:7)]
+
+# Identify near zero variables and remove from training data
+nzv <- nearZeroVar(training_data, saveMetrics=TRUE)
+training_data <- training_data[,(nzv$nzv==FALSE)]
+testing_data <- testing_data[,(nzv$nzv==FALSE)]
+```
+After removing those datasets there are still a number of columns that contain NA values.  Those are identified and removed from the dataset as well.
+```{r}
+# Remove mostly null values
+not_null_columns <- colSums(is.na(training_data)) == 0
+training_data <- training_data[,not_null_columns]
+testing_data <- testing_data[,not_null_columns]
+```
+
+Once the data pre-processing has pared down the number of predictors to 52 (53 including classe) from the original 159, I used the caret 'train' function with the random forest method to create a prediction model.  I then predict for the 'classe' variable from the training and test datasets.
+
+```{r}
+modelFit <- train(classe ~ ., method="rf", data=training_data, prox=TRUE)
+#load("~/Desktop/modelFit.R.data")
+
+pred_train <- predict(modelFit, training_data[,-53])
+```
+
+# Out of Sample Accuracy
+To evaluate the out of sample error I looked at two different outcomes.  The train() function provides a bootstrapped approximation of the out of sample error with the modelFit which yielded an estimated out of sample accuracy rate of 98.989%.
+
+I also ran a confusion matrix using the prediction based on the modelFit trained on the training data, against the testing data which yielded a 99.92% accuracy.  
+```{r}
+pred <- predict(modelFit, testing_data[,-53])
+confusionMatrix(pred,testing_data$classe) 
+
+main_test <- predict(modelFit, quiz_data)
+
+```
+
+My results for the prediction against the quiz data yielded a score of 20/20 on the quiz so the practical application of the model appears to have worked well.
+
+
+
+
+
